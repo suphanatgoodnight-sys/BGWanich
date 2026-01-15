@@ -1,0 +1,5 @@
+{
+  "name": "Wanich Board Game Management System",
+  "description": "A professional and formal board game borrowing and returning system with Google Sheets integration and a clean light-themed UI.",
+  "requestFramePermissions": []
+}
