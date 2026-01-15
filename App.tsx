@@ -7,6 +7,7 @@ import { BorrowModal } from './components/BorrowModal';
 import { ReturnModal } from './components/ReturnModal';
 import { HistoryView } from './components/HistoryView';
 import { AuthView } from './components/AuthView';
+import { ManageGamesView } from './components/ManageGamesView';
 import { submitToGoogleSheet } from './services/googleSheetService';
 
 const App: React.FC = () => {
@@ -40,6 +41,13 @@ const App: React.FC = () => {
   }, [currentUser]);
 
   const toggleGameSelection = (id: string) => {
+    // Only allow selection of available games
+    const game = games.find(g => g.id === id);
+    if (!game?.available && !selectedGameIds.includes(id)) {
+      notify('เกมนี้ถูกยืมไปแล้ว ไม่สามารถเลือกได้');
+      return;
+    }
+    
     setSelectedGameIds(prev => 
       prev.includes(id) ? prev.filter(gid => gid !== id) : [...prev, id]
     );
@@ -57,7 +65,6 @@ const App: React.FC = () => {
   const handleLoginSuccess = (user: User) => {
     setCurrentUser(user);
     notify(`ยินดีต้อนรับคุณ ${user.fullName}`);
-    // If they were coming from selection, go to form
     if (selectedGameIds.length > 0) {
       setView(AppView.BORROW_FORM);
     } else {
@@ -92,18 +99,26 @@ const App: React.FC = () => {
 
     if (success) {
       addRecord(newRecord);
+      
+      // Update local games availability
+      setGames(prev => prev.map(g => 
+        selectedGameIds.includes(g.id) ? { ...g, available: false } : g
+      ));
+      
       setView(AppView.SUCCESS);
       setSelectedGameIds([]);
     }
     setIsSubmitting(false);
   };
 
+  const handleReturnSuccess = (msg: string) => {
+    notify(msg);
+  };
+
   const handleLogout = () => {
     setCurrentUser(null);
     setView(AppView.CATALOG);
     notify('ออกจากระบบเรียบร้อยแล้ว');
-    // Clear Google sign-in session if needed
-    // Fix: Accessing window.google through any cast to avoid TypeScript errors for the external script
     const google = (window as any).google;
     if (google) google.accounts.id.disableAutoSelect();
   };
@@ -111,6 +126,22 @@ const App: React.FC = () => {
   const notify = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(null), 5000);
+  };
+
+  // Game Management Handlers
+  const handleAddGame = (game: BoardGame) => {
+    setGames([...games, game]);
+    notify(`เพิ่มเกม ${game.name} เรียบร้อยแล้ว`);
+  };
+
+  const handleUpdateGame = (game: BoardGame) => {
+    setGames(games.map(g => g.id === game.id ? game : g));
+    notify(`แก้ไขข้อมูลเกม ${game.name} เรียบร้อยแล้ว`);
+  };
+
+  const handleDeleteGame = (id: string) => {
+    setGames(games.filter(g => g.id !== id));
+    notify('ลบเกมเรียบร้อยแล้ว');
   };
 
   const selectedGames = games.filter(g => selectedGameIds.includes(g.id));
@@ -121,7 +152,10 @@ const App: React.FC = () => {
       <header className="bg-white border-b border-gray-100 sticky top-0 z-30 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-100 cursor-pointer" onClick={() => setView(AppView.CATALOG)}>
+            <div 
+              className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-100 cursor-pointer transition-transform hover:scale-105 active:scale-95" 
+              onClick={() => setView(AppView.CATALOG)}
+            >
               W
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-gray-900 cursor-pointer" onClick={() => setView(AppView.CATALOG)}>wanich</h1>
@@ -138,8 +172,15 @@ const App: React.FC = () => {
               onClick={() => setView(AppView.HISTORY)}
               className={`text-sm font-bold transition-colors ${view === AppView.HISTORY ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-600'}`}
             >
-              ประวัติการยืม-คืน
+              ประวัติยืม-คืน
             </button>
+            <button 
+              onClick={() => setView(AppView.MANAGE_GAMES)}
+              className={`text-sm font-bold transition-colors ${view === AppView.MANAGE_GAMES ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-600'}`}
+            >
+              จัดการคลัง
+            </button>
+            
             {currentUser ? (
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2 bg-gray-50 pl-1 pr-3 py-1 rounded-full border border-gray-100">
@@ -194,33 +235,45 @@ const App: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div>
                 <h2 className="text-3xl font-extrabold text-gray-900 mb-2">บอร์ดเกม</h2>
-                <p className="text-gray-500 max-w-2xl">เลือกบอร์ดเกมที่ต้องการยืมจากรายการด้านล่าง เพื่อนำไปสร้างความสนุกและความสัมพันธ์ที่ดีกับเพื่อนๆ</p>
-              </div>
-              
-              <div className="bg-white p-1 rounded-xl shadow-sm border border-gray-100 flex gap-1">
-                <button className="px-4 py-2 bg-indigo-50 text-indigo-700 font-bold rounded-lg text-sm">ทั้งหมด</button>
-                <button className="px-4 py-2 text-gray-500 font-medium rounded-lg text-sm hover:bg-gray-50">ยอดนิยม</button>
-                <button className="px-4 py-2 text-gray-500 font-medium rounded-lg text-sm hover:bg-gray-50">ว่างตอนนี้</button>
+                <p className="text-gray-500 max-w-2xl">เลือกบอร์ดเกมที่ต้องการยืมจากรายการด้านล่าง</p>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {games.map(game => (
-                <BoardGameCard 
-                  key={game.id} 
-                  game={game} 
-                  isSelected={selectedGameIds.includes(game.id)}
-                  onToggle={toggleGameSelection}
-                />
-              ))}
-            </div>
+            {games.length === 0 ? (
+              <div className="py-20 text-center bg-white rounded-3xl border border-gray-100 shadow-sm">
+                <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-10 h-10 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0a2 2 0 01-2 2H6a2 2 0 01-2-2m16 0V9a2 2 0 00-2-2H6a2 2 0 00-2 2v2m4 6h4" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">ยังไม่มีบอร์ดเกมในระบบ</h3>
+                <p className="text-gray-500 mb-6">กรุณาไปที่เมนู "จัดการคลัง" เพื่อเพิ่มบอร์ดเกมใหม่</p>
+                <button 
+                  onClick={() => setView(AppView.MANAGE_GAMES)}
+                  className="px-6 py-2 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors"
+                >
+                  ไปที่หน้าจัดการคลัง
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {games.map(game => (
+                  <BoardGameCard 
+                    key={game.id} 
+                    game={game} 
+                    isSelected={selectedGameIds.includes(game.id)}
+                    onToggle={toggleGameSelection}
+                  />
+                ))}
+              </div>
+            )}
 
             {/* Persistent CTA */}
             {selectedGameIds.length > 0 && (
-              <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-4 animate-in slide-in-from-bottom-4">
+              <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-4 z-40 animate-in slide-in-from-bottom-4">
                 <button 
                   onClick={() => setShowBorrowModal(true)}
-                  className="w-full bg-indigo-600 text-white py-4 px-6 rounded-2xl shadow-2xl shadow-indigo-200 font-bold flex items-center justify-between group hover:bg-indigo-700 transition-all"
+                  className="w-full bg-indigo-600 text-white py-4 px-6 rounded-2xl shadow-2xl shadow-indigo-200 font-bold flex items-center justify-between group hover:bg-indigo-700 transition-all transform hover:scale-[1.02]"
                 >
                   <div className="flex items-center gap-3">
                     <span className="bg-white/20 px-3 py-1 rounded-lg text-sm">{selectedGameIds.length}</span>
@@ -246,6 +299,16 @@ const App: React.FC = () => {
           <HistoryView 
             records={records} 
             onBack={() => setView(AppView.CATALOG)} 
+          />
+        )}
+
+        {view === AppView.MANAGE_GAMES && (
+          <ManageGamesView 
+            games={games}
+            onAddGame={handleAddGame}
+            onUpdateGame={handleUpdateGame}
+            onDeleteGame={handleDeleteGame}
+            onBack={() => setView(AppView.CATALOG)}
           />
         )}
 
@@ -384,7 +447,7 @@ const App: React.FC = () => {
       {showReturnModal && (
         <ReturnModal 
           onClose={() => setShowReturnModal(false)}
-          onSuccess={notify}
+          onSuccess={handleReturnSuccess}
           onAddRecord={addRecord}
         />
       )}

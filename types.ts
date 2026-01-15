@@ -39,5 +39,6 @@ export enum AppView {
   BORROW_FORM = 'BORROW_FORM',
   SUCCESS = 'SUCCESS',
   HISTORY = 'HISTORY',
+  MANAGE_GAMES = 'MANAGE_GAMES',
   ADMIN = 'ADMIN'
 }
